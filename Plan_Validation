@@ -12,3 +12,13 @@ if invalid_cost.count() > 0:
     raise Exception("Validation Failed: Plan Cost should be greater than 0.")
 else:
     print("Validation Passed: Cost Amount valid.")
+
+
+duplicate_plan = (
+    plan_df.groupBy("plan_id")
+           .count()
+           .filter(col("count") > 1)
+)
+
+if duplicate_plan.count() > 0:
+    raise Exception("Duplicate PlanID found.")
