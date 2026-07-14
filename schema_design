@@ -1,0 +1,115 @@
+
+
+from pyspark.sql import SparkSession, functions as F
+from pyspark.sql.window import Window
+
+
+
+
+
+dim_channel = (
+    df_channel_code
+    .withColumnRenamed("play_session_channel_code", "channel_code")
+    .withColumnRenamed("english_description", "channel_name_en")
+    .withColumnRenamed("french_description", "channel_name_fr")
+)
+write_csv(dim_channel, "dim_channel")
+
+
+dim_status = (
+    df_status_code
+    .withColumnRenamed("play_session_status_code", "status_code")
+    .withColumnRenamed("english_description", "status_name_en")
+    .withColumnRenamed("french_description", "status_name_fr")
+)
+write_csv(dim_status, "dim_status")
+
+dim_plan = (
+    df_plan.join(plan_payment_frequency, on="payment_frequency_code", how="left")
+    .withColumnRenamed("english_description", "payment_frequency_name_en")
+    .withColumnRenamed("french_description", "payment_frequency_name_fr")
+)
+write_csv(dim_plan, "dim_plan")
+
+# --- dim_payment_detail ---
+dim_payment_detail = df_user_payment_detail
+write_csv(dim_payment_detail, "dim_payment_detail")
+
+# --- dim_user: base user + registration info + subscriber flag ---
+dim_user = (
+    user.join(
+        user_registration.drop("email"),
+        on="user_id",
+        how="left",
+    )
+    .withColumn("is_registered", F.col("user_registration_id").isNotNull())
+    .withColumn("email", F.when(F.col("email") == "", None).otherwise(F.col("email")))
+)
+
+
+
+write_csv(dim_user, "dim_user")
+
+
+
+
+
+registered_ids = user_registration.select("user_id").distinct()
+
+fact_play_session = (
+    df_user_play_session
+   
+    .withColumn("start_date_key", date_key_col("start_datetime"))
+    .withColumn("end_date_key", date_key_col("end_datetime"))
+    .join(
+        registered_ids.withColumn("is_registered_user", F.lit(True)),
+        on="user_id",
+        how="left",
+    )
+    .withColumn("is_registered_user", F.coalesce(F.col("is_registered_user"), F.lit(False)))
+    .select(
+        "play_session_id", "user_id", "start_date_key", "end_date_key",
+        "channel_code", "status_code", "total_score", "duration_seconds",
+        "start_datetime", "end_datetime", "is_registered_user",
+    )
+)
+write_csv(fact_play_session, "fact_play_session")
+
+
+AS_OF_DATE = "2025-01-01"
+
+fsub = (
+    user_plan
+    .join(plan, on="plan_id", how="left")
+    .join(
+        user_registration.select("user_registration_id", "user_id"),
+        on="user_registration_id",
+        how="left",
+    )
+    .withColumn("is_active", F.year(as_date_col("end_date")) == 9999)
+    .withColumn("start_date_key", date_key_col("start_date"))
+    .withColumn(
+        "end_date_key",
+        F.when(~F.col("is_active"), date_key_col("end_date")).otherwise(F.lit(None)),
+    )
+    .withColumn(
+        "end_date_effective",
+        F.when(F.col("is_active"), F.to_date(F.lit(AS_OF_DATE))).otherwise(as_date_col("end_date")),
+    )
+    .withColumn(
+        "duration_days",
+        F.datediff(F.col("end_date_effective"), as_date_col("start_date")),
+    )
+)
+
+
+
+fact_subscription = fsub.select(
+    "user_registration_id", "user_id", "payment_detail_id", "plan_id",
+    "payment_frequency_code", "cost_amount", "start_date_key", "end_date_key",
+    "duration_days", "is_active", "recognized_revenue",
+)
+write_csv(fact_subscription, "fact_subscription")
+
+
+spark.stop()
