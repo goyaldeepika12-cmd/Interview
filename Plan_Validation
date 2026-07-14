@@ -1,0 +1,14 @@
+from pyspark.sql.functions import *
+
+invalid_cost = plan_df.filter(
+    (col("Cost_amount").isNull()) |
+    (col("Cost_amount") <= 0)
+)
+
+if invalid_cost.count() > 0:
+    print("Invalid Plan Cost Found")
+    invalid_cost.show(truncate=False)
+
+    raise Exception("Validation Failed: Plan Cost should be greater than 0.")
+else:
+    print("Validation Passed: Cost Amount valid.")
