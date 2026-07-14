@@ -1,0 +1,15 @@
+from pyspark.sql.functions import *
+
+invalid_users = (
+    user_registration_df.join(
+        user_df,
+        "UserID",
+        "leftanti"
+    )
+)
+
+if invalid_users.count() > 0:
+    print("User does not exist")
+    invalid_users.show()
+
+    raise Exception("Foreign Key Validation Failed")
