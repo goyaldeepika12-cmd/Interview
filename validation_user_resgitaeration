@@ -1,0 +1,24 @@
+from pyspark.sql import SparkSession
+from pyspark.sql.functions import col
+
+from pyspark.sql.functions import col
+
+duplicate_registration = (
+   user_registration_df
+    .groupBy("UserID")
+    .count()
+    .filter(col("count") > 1)
+)
+
+if duplicate_registration.count() > 0:
+    print("Duplicate Registration Found")
+    duplicate_registration.show()
+
+    raise Exception("Validation Failed : Duplicate User Registration")
+else:
+    print(" No Duplicate Registrations")
+
+null_user = user_registration_df.filter(col("UserID").isNull())
+
+if null_user.count() > 0:
+    raise Exception("UserID cannot be NULL")
