@@ -90,7 +90,7 @@ fsub = (
     .withColumn("start_date_key", date_key_col("start_date"))
     .withColumn(
         "end_date_key",
-        F.when(~F.col("is_active"), date_key_col("end_date")).otherwise(F.lit(None)),
+        F.when(F.col("is_active"), date_key_col("end_date")).otherwise(F.lit(None)),
     )
     .withColumn(
         "end_date_effective",
